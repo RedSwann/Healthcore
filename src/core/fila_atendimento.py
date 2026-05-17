@@ -62,7 +62,7 @@ class FilaAtendimento:
         self.inicio = self.inicio.proximo
 
         # aumenta tempo dos outros pacientes
-        self._atualizar_fila()
+        self.atualizar_fila()
 
         return removido
 
