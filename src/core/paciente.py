@@ -56,7 +56,9 @@ class ListaPacientes:
             })
             atual = atual.proximo
 
-        os.makedirs("data", exist_ok=True)
+        pasta = os.path.dirname(self.arquivo)
+        if pasta:
+            os.makedirs(pasta, exist_ok=True)
 
         with open(self.arquivo, "w", encoding="utf-8") as f:
             json.dump(dados, f, indent=4, ensure_ascii=False)
