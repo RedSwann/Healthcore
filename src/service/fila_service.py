@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from core.fila_atendimento import FilaAtendimento
 from core.paciente import ListaPacientes
 from core.pilha_acoes import Pilha
@@ -5,15 +7,26 @@ from core.pilha_acoes import Pilha
 
 class FilaService:
 
-    def __init__(self, lista, fila, pilha):
+    def __init__(self, lista, fila, historico):
         self.lista = lista
         self.fila = fila
-        self.pilha = pilha
+        self.historico = historico
 
     # ======================
     # ADICIONAR NA FILA
     # ======================
     def adicionar(self, cpf, nivel):
+
+        cpf = str(cpf).strip()
+
+        if not cpf:
+            return False, "Preencha o campo CPF."
+
+        if not cpf.isdigit():
+            return False, "CPF deve conter apenas números."
+
+        if len(cpf) != 11:
+            return False, "CPF deve conter exatamente 11 dígitos."
 
         paciente = self.lista.buscar(cpf)
 
@@ -25,10 +38,14 @@ class FilaService:
         if not ok:
             return False, "Paciente já está na fila."
 
-        self.pilha.empilhar({
+        self.historico.empilhar({
             "tipo": "adicionar_fila",
-            "paciente": paciente,
-            "nivel": nivel
+            "acao": "Entrada na fila",
+            "cpf": paciente.cpf,
+            "nome": paciente.nome,
+            "nivel": nivel,
+            "detalhes": f"Paciente {paciente.nome} entrou na fila com nível {nivel}.",
+            "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         })
 
         return True, "Paciente adicionado."
@@ -38,36 +55,67 @@ class FilaService:
     # ======================
     def atender(self):
 
-        paciente = self.fila.atender_proximo()
+        paciente_fila = self.fila.atender_proximo()
 
-        if not paciente:
+        if not paciente_fila:
             return False, "Fila vazia."
 
-        self.pilha.empilhar({
+        paciente = paciente_fila.paciente
+
+        self.historico.empilhar({
             "tipo": "atender",
-            "paciente": paciente.paciente,
-            "nivel": paciente.nivel
+            "acao": "Atendimento",
+            "cpf": paciente.cpf,
+            "nome": paciente.nome,
+            "nivel": paciente_fila.nivel,
+            "detalhes": f"Paciente {paciente.nome} foi atendido. Nível: {paciente_fila.nivel}.",
+            "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         })
 
-        return True, f"Atendendo {paciente.paciente.nome}"
+        return True, f"Atendendo {paciente.nome}"
 
     # ======================
     # DESFAZER ÚLTIMA AÇÃO
     # ======================
     def desfazer(self):
 
-        acao = self.pilha.desempilhar()
+        acao = self.historico.desempilhar()
 
         if not acao:
             return False, "Nada para desfazer."
 
-        if acao["tipo"] == "adicionar_fila":
-            self.fila.remover(acao["paciente"].cpf)
+        tipo = acao.get("tipo")
 
-        elif acao["tipo"] == "atender":
-            self.fila.adicionar(
-                acao["paciente"],
-                acao["nivel"]
-            )
+        if tipo == "adicionar_fila":
+            cpf = acao.get("cpf")
 
-        return True, "Ação desfeita."
+            if not cpf:
+                return False, "Não foi possível desfazer: CPF não encontrado no histórico."
+
+            removido = self.fila.remover(cpf)
+
+            if not removido:
+                return False, "Não foi possível desfazer: paciente não está mais na fila."
+
+            return True, "Entrada na fila desfeita."
+
+        if tipo == "atender":
+            cpf = acao.get("cpf")
+            nivel = acao.get("nivel")
+
+            if not cpf or not nivel:
+                return False, "Não foi possível desfazer: dados incompletos no histórico."
+
+            paciente = self.lista.buscar(cpf)
+
+            if not paciente:
+                return False, "Não foi possível desfazer: paciente não está cadastrado."
+
+            ok = self.fila.adicionar(paciente, nivel)
+
+            if not ok:
+                return False, "Não foi possível desfazer: paciente já está na fila."
+
+            return True, "Atendimento desfeito. Paciente voltou para a fila."
+
+        return False, "Esta ação do histórico não pode ser desfeita."
